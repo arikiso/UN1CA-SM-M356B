@@ -3,7 +3,7 @@
 
 # UN1CA configuration file for Exynos devices (essi)
 
-# Galaxy S22 (Exynos) (One UI 8.0)
+# Galaxy S24 FE (Exynos) (One UI 9.0)
 SOURCE_FIRMWARE="SM-S721B/EUC/351273097739807"
 SOURCE_EXTRA_FIRMWARES=()
 SOURCE_PLATFORM_SDK_VERSION=37
