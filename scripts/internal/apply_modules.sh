@@ -22,11 +22,11 @@ APPLY_MODULE()
         MODPATH="$MODPATH/$TARGET_OS_SINGLE_SYSTEM_IMAGE"
     fi
 
-    if [ ! -f "$MODPATH/module.prop" ]; then
+    if [ -f "$MODPATH/disable" ]; then
+        return 0
+    elif [ ! -f "$MODPATH/module.prop" ]; then
         LOGE "File not found: ${MODPATH//$SRC_DIR\//}/module.prop"
         return 1
-    elif [ -f "$MODPATH/disable" ]; then
-        return 0
     else
         MODNAME="$(grep "^name" "$MODPATH/module.prop" | sed "s/name=//")"
         MODAUTH="$(grep "^author" "$MODPATH/module.prop" | sed "s/author=//" | sed "s/, /, @/g")"
@@ -52,15 +52,26 @@ APPLY_MODULE()
         fi
     fi
 
-    READ_AND_APPLY_PROPS "$MODPATH"
+    READ_AND_APPLY_PROPS "$MODPATH" || LOGW "Module \"$MODNAME\": some properties were skipped"
 
     if [ -f "$MODPATH/customize.sh" ]; then
-        . "$MODPATH/customize.sh"
+        # Run every module in its own shell.
+        # - ABORT returns 1, and this script runs under `set -e`, so a single
+        #   incompatible module used to take the whole build down. That is why
+        #   modules get parked behind a `disable` file instead of being run and
+        #   reported
+        # - A module that fails now only loses itself; the remaining modules and
+        #   the build continue, and the failure is named in the log
+        # - It also stops one module's variables and functions from leaking into
+        #   the next one
+        if ! ( set -e; . "$MODPATH/customize.sh" ); then
+            LOGE "Module \"$MODNAME\" failed, continuing with the remaining modules"
+        fi
     fi
 
     if [ -d "$MODPATH/smali" ]; then
         while IFS= read -r f; do
-            APPLY_SMALI_PATCHES "$MODPATH/smali" "$f"
+            APPLY_SMALI_PATCHES "$MODPATH/smali" "$f" || LOGW "Module \"$MODNAME\": could not patch $f"
         done < <(find "$MODPATH/smali" -type d \( -name "*.apk" -o -name "*.jar" \) | sed "s|$MODPATH/smali/||")
     fi
 
@@ -134,7 +145,10 @@ elif [ ! -d "$1" ]; then
 fi
 
 while IFS= read -r f; do
-    APPLY_MODULE "$f"
+    # APPLY_MODULE returns non-zero only for a structurally broken module
+    # (missing folder or module.prop). Under `set -e` that used to take the
+    # build down just like a failing patch did.
+    APPLY_MODULE "$f" || LOGE "Module \"$(basename "$f")\" could not be applied, continuing with the remaining modules"
 done < <(find "$1" -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort)
 
 exit 0

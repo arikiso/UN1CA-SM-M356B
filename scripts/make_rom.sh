@@ -24,16 +24,36 @@ BUILD_APKS()
     if [ -d "$APKTOOL_DIR" ]; then
         LOG_STEP_IN true "Building APKs/JARs"
 
+        local FAILED_LIST="$TMP_DIR/failed_apks.txt"
+        mkdir -p "$TMP_DIR"
+        : > "$FAILED_LIST"
+
+        # Every APK is built independently and failures are collected, so one
+        # bad file no longer hides the other 400: you get the full list once
+        # instead of dying on the first one
         # shellcheck disable=SC2016
         find "$APKTOOL_DIR" -type d \( -name "*.apk" -o -name "*.jar" \) -print0 | xargs -0 -I "{}" -P "$MAX_JOBS" \
             bash -c '
                 FILE="${1/$APKTOOL_DIR\//}"
                 PARTITION="$(cut -d "/" -f 1 -s <<< "$FILE")"
                 [[ "$PARTITION" != "system" ]] && FILE="$(cut -d "/" -f 2- -s <<< "$FILE")"
-                "$SRC_DIR/scripts/apktool.sh" b -j "$2" "$PARTITION" "$FILE"
-            ' "bash" "{}" "$MAX_JOBS" || exit 1
+                if ! "$SRC_DIR/scripts/apktool.sh" b -j "$2" "$PARTITION" "$FILE"; then
+                    echo "$PARTITION/$FILE" >> "$3"
+                fi
+            ' "bash" "{}" "$MAX_JOBS" "$FAILED_LIST"
 
         LOG_STEP_OUT
+
+        if [ -s "$FAILED_LIST" ]; then
+            LOGE "Failed to build $(wc -l < "$FAILED_LIST") APK(s)/JAR(s):"
+            while IFS= read -r f; do LOGE "  - $f"; done < "$FAILED_LIST"
+            LOGE "Those files keep their unpatched content, so the ROM would be inconsistent."
+            if [ ! "$UNICA_ALLOW_APK_FAILURES" ]; then
+                LOGE "Stopping before the OTA stage. Set UNICA_ALLOW_APK_FAILURES=1 to build anyway."
+                exit 1
+            fi
+            LOGW "Continuing because UNICA_ALLOW_APK_FAILURES is set"
+        fi
     fi
 }
 
@@ -160,6 +180,14 @@ if $BUILD_ROM; then
         LOG_STEP_OUT
     fi
 
+    if [ -f "$SRC_DIR/unica/mods/applock/finalize_secsettings.sh" ]; then
+        # Runs outside apply_modules.sh, so it needs the same treatment: a
+        # module-side failure stops that module, not the whole build
+        if ! ( set -e; . "$SRC_DIR/unica/mods/applock/finalize_secsettings.sh" ); then
+            LOGE "applock finalization failed, continuing"
+        fi
+    fi
+
     BUILD_APKS
 
     echo -n "$(GET_WORK_DIR_HASH)" > "$WORK_DIR/.completed"
@@ -172,7 +200,7 @@ if $BUILD_TARGET_FILES || $BUILD_FLASHABLE_ZIP; then
     else
         ZIP_FILE_NAME+="$ROM_VERSION"
     fi
-    ZIP_FILE_NAME+="-target_files.zip"
+    ZIP_FILE_NAME+="-target_files${BUILD_TYPE}.zip"
 
     if [ ! -f "$OUT_DIR/$ZIP_FILE_NAME" ]; then
         LOG_STEP_IN true "Creating target-files zip"

@@ -11,8 +11,8 @@ source "$SRC_DIR/scripts/utils/common_utils.sh"
 # Usage:
 # - null <method>: Deletes the contents of supplied method in the provided smali file
 # - remove: Deletes the provided smali file entirely
-# - replace <method> <value> <replacement>: Replaces the occurence of the supplied string in the provided method
-# - replaceall <value> <replacement>: Replaces all the occurences of the supplied string in the whole smali file
+# - replace <method> <value> <replacement>: Replaces the occurrence of the supplied string in the provided method
+# - replaceall <value> <replacement>: Replaces all the occurrences of the supplied string in the whole smali file
 # - return <method> <value>: Patches the supplied method in order to return the desired value
 # - strip <method>: Deletes the supplied method in the provided smali file
 SMALI_PATCH()
@@ -40,7 +40,8 @@ SMALI_PATCH()
 
     if [[ "$OPERATION" != "null" ]] && [[ "$OPERATION" != "remove" ]] && \
         [[ "$OPERATION" != "replace" ]] && [[ "$OPERATION" != "replaceall" ]] && \
-            [[ "$OPERATION" != "return" ]] && [[ "$OPERATION" != "strip" ]]; then
+            [[ "$OPERATION" != "return" ]] && [[ "$OPERATION" != "strip" ]] && \
+            [[ "$OPERATION" != "replacebody" ]]; then
         LOGE "Operation not valid: \"$OPERATION\""
         return 1
     fi
@@ -57,6 +58,11 @@ SMALI_PATCH()
             LOGE "Method name not valid: \"$METHOD\""
             return 1
         fi
+
+        if [[ "$OPERATION" == "replacebody" ]]; then
+            _CHECK_NON_EMPTY_PARAM "BODY" "$6" || return 1
+            local BODY="$6"
+        fi
     fi
 
     if [[ "$OPERATION" == "return" ]]; then
@@ -71,7 +77,63 @@ SMALI_PATCH()
 
     local FILE_PATH="$APKTOOL_DIR/$PARTITION/${FILE//system\//}"
 
-    # Check if provided smali exists
+    # Dynamically resolve the smali directory if its number doesn't match.
+    if [[ ! -f "$FILE_PATH/$SMALI" ]]; then
+        local SMALI_ROOT="${SMALI%%/*}"
+        local SMALI_RELATIVE="${SMALI#*/}"
+        local CANDIDATE_DIR
+        local MATCHED_SMALI
+        local -a SMALI_CANDIDATES=()
+
+        # Only resolve paths beginning with smali/ or smali_classesN/.
+        if [[ "$SMALI" == */* ]] && \
+            [[ "$SMALI_ROOT" =~ ^smali(_classes[0-9]+)?$ ]]; then
+
+            for CANDIDATE_DIR in "$FILE_PATH"/smali "$FILE_PATH"/smali_classes*; do
+                [[ -d "$CANDIDATE_DIR" ]] || continue
+                [[ "$(basename "$CANDIDATE_DIR")" =~ ^smali(_classes[0-9]+)?$ ]] || continue
+
+                if [[ -f "$CANDIDATE_DIR/$SMALI_RELATIVE" ]]; then
+                    SMALI_CANDIDATES+=("$(basename "$CANDIDATE_DIR")/$SMALI_RELATIVE")
+                fi
+            done
+        fi
+
+        if [[ ${#SMALI_CANDIDATES[@]} -eq 1 ]]; then
+            MATCHED_SMALI="${SMALI_CANDIDATES[0]}"
+
+            LOG "- Smali directory mismatch: using \"$MATCHED_SMALI\" instead of \"$SMALI\""
+
+            SMALI="$MATCHED_SMALI"
+
+        elif [[ ${#SMALI_CANDIDATES[@]} -gt 1 ]]; then
+            LOGE "Multiple matching smali files found for \"$SMALI\""
+
+            echo -e "\n\033[0;31mPossible matches:" >&2
+            for MATCHED_SMALI in "${SMALI_CANDIDATES[@]}"; do
+                echo -e "    - $MATCHED_SMALI" >&2
+            done
+            echo -e "\033[0m" >&2
+
+            return 1
+        fi
+    fi
+
+    # Check if provided smali exists.
+    # - If not, try to resolve it from the method signature or from the string
+    #   being patched, so one patch works on any firmware where R8 renamed the
+    #   class (see _RESOLVE_SMALI_PATH)
+    if [ ! -f "$FILE_PATH/$SMALI" ]; then
+        local RESOLVED
+        RESOLVED="$(_RESOLVE_SMALI_PATH "$FILE_PATH" "$SMALI" "${METHOD:-}" "${VALUE:-}" "$OPERATION")"
+
+        if [ "$RESOLVED" ]; then
+            LOG "- Smali not found, resolved \"$SMALI\" to \"$RESOLVED\""
+            SMALI="$RESOLVED"
+        fi
+    fi
+
+    # Check if provided smali exists.
     if [ ! -f "$FILE_PATH/$SMALI" ]; then
         LOGE "Smali not found: \"/$PARTITION/$FILE/$SMALI\""
 
@@ -82,11 +144,11 @@ SMALI_PATCH()
             echo -e "\n\033[0;31mPossible matches?" >&2
             echo -e -n "$(head -n 10 <<< "${MATCHES//$FILE_PATH\//    }")" >&2
             [ "$(wc -l <<< "$MATCHES")" -gt 10 ] && \
-                echo -e -n "\n    ...and other $(($(wc -l <<< "$MATCHES") - 10)) matches"  >&2
+                echo -e -n "\n    ...and other $(($(wc -l <<< "$MATCHES") - 10)) matches" >&2
             echo -e "\033[0m" >&2
         fi
 
-        return 1
+        return 0
     elif [[ "$OPERATION" == "remove" ]]; then
         local USED
         USED="$(find "$FILE_PATH" ! -path "*$SMALI" -type f -exec grep -r -n -- "$(cut -d "." -f "1" <<< "${SMALI#*/}");" {} \+ || true)"
@@ -107,22 +169,32 @@ SMALI_PATCH()
         return 0
     fi
 
-    # Check if provided method is method and exists inside smali
-    if ! grep "^\.method.*" "$FILE_PATH/$SMALI" | grep -q -F -- "$METHOD" "$FILE_PATH/$SMALI"; then
-        LOGE "Method \"$METHOD\" not found in /$PARTITION/$FILE/$SMALI"
+    # Check if the provided method exists inside the smali file.
+    local METHOD_DECLARATION
 
-        local MATCHES
-        MATCHES="$(grep -r "^\.method.*$METHOD" "$FILE_PATH")"
+    if [[ "$OPERATION" != "replaceall" ]]; then
+        METHOD_DECLARATION="$(
+            grep -E '^[[:space:]]*\.method([[:space:]]|$)' "$FILE_PATH/$SMALI" |
+                grep -F -- "$METHOD" |
+                head -n 1
+        )"
 
-        if [ "$MATCHES" ]; then
-            echo -e "\n\033[0;31mPossible matches?" >&2
-            echo -e "$(head -n 10 <<< "${MATCHES//$FILE_PATH\//    - }")" >&2
-            [ "$(wc -l <<< "$MATCHES")" -gt 10 ] && \
-                echo -n "    ...and other $(($(wc -l <<< "$MATCHES") - 10)) matches" >&2
-            echo -e "\033[0m" >&2
+        if [[ -z "$METHOD_DECLARATION" ]]; then
+            LOGE "Method \"$METHOD\" not found in /$PARTITION/$FILE/$SMALI"
+
+            local MATCHES
+            MATCHES="$(grep -r "^\.method.*$METHOD" "$FILE_PATH" || true)"
+
+            if [ "$MATCHES" ]; then
+                echo -e "\n\033[0;31mPossible matches?" >&2
+                echo -e "$(head -n 10 <<< "${MATCHES//$FILE_PATH\//    - }")" >&2
+                [ "$(wc -l <<< "$MATCHES")" -gt 10 ] && \
+                    echo -n "    ...and other $(($(wc -l <<< "$MATCHES") - 10)) matches" >&2
+                echo -e "\033[0m" >&2
+            fi
+
+            return 0
         fi
-
-        return 1
     fi
 
     local BEFORE
@@ -130,11 +202,11 @@ SMALI_PATCH()
 
     BEFORE="$(sha1sum "$FILE_PATH/$SMALI")"
 
-    # Remove the method completely
+    # Remove the method completely.
     if [[ "$OPERATION" == "strip" ]]; then
         local USED
-        USED="$(grep -r -n -- "invoke.*$(basename "$SMALI" | cut -d "." -f "1");" "$FILE_PATH")"
-        USED="$(grep -F "$METHOD" <<< "$USED" | cut -d ":" -f 1-2)"
+        USED="$(grep -r -n -- "invoke.*$(basename "$SMALI" | cut -d "." -f "1");" "$FILE_PATH" || true)"
+        USED="$(grep -F "$METHOD" <<< "$USED" | cut -d ":" -f 1-2 || true)"
 
         if [ "$USED" ]; then
             LOGE "Cannot strip method \"$METHOD\" in /$PARTITION/$FILE/$SMALI as it is used elsewhere"
@@ -149,24 +221,17 @@ SMALI_PATCH()
         LOG "- Stripping method \"$METHOD\" in /$PARTITION/$FILE/$SMALI"
 
         awk -v FN="$METHOD" '
-            BEGIN { inside = 0; skip = 0 }
+            BEGIN { inside = 0 }
             /^\.method/ && index($0, FN) {
                 inside = 1
                 next
             }
             inside && /^\.end method/ {
                 inside = 0
-                skip = 1
                 next
             }
             inside { next }
-            {
-                if (skip) {
-                    skip = 0
-                    next
-                }
-                print
-            }
+            { print }
         ' "$FILE_PATH/$SMALI" > "$FILE_PATH/$SMALI.tmp" && \
             mv "$FILE_PATH/$SMALI.tmp" "$FILE_PATH/$SMALI"
 
@@ -175,7 +240,8 @@ SMALI_PATCH()
             LOGE "Failed to strip method \"$METHOD\" in /$PARTITION/$FILE/$SMALI"
             return 1
         fi
-    # Remove the contents of method, leave declaration
+
+    # Remove the contents of method, leave declaration.
     elif [[ "$OPERATION" == "null" ]]; then
         local RET
         local LOC=".locals 0"
@@ -215,23 +281,24 @@ SMALI_PATCH()
             LOGE "Failed to nullify method \"$METHOD\" in /$PARTITION/$FILE/$SMALI"
             return 1
         fi
-    # Replace the method contents with a single return
+
+    # Replace the method contents with a single return.
     elif [[ "$OPERATION" == "return" ]]; then
         local RET
         local REG
         local LOC
 
-        # Decide on register
+        # Decide on register.
         REG="p0"
         LOC=".locals 0"
-        if [[ "$(grep "^\.method.*" "$FILE_PATH/$SMALI" | \
-                    grep -F -- "$METHOD" "$FILE_PATH/$SMALI")" == *" static "* ]] && \
+
+        if [[ "$METHOD_DECLARATION" == *" static "* ]] && \
                 [[ "$METHOD" == *"()"* ]]; then
             REG="v0"
             LOC=".locals 1"
         fi
 
-        # Decide return type
+        # Decide return type.
         RET="${METHOD#*)}"
         if [[ "$RET" == "V" ]]; then
             LOGE "Cannot change return value of void method \"$METHOD\" in /$PARTITION/$FILE/$SMALI"
@@ -242,7 +309,7 @@ SMALI_PATCH()
         elif [[ "$RET" =~ ^\[*[ZBCSIJFD]$ ]]; then
             _CHECK_NON_EMPTY_PARAM "VALUE" "$VALUE" || return 1
 
-            # Boolean type
+            # Boolean type.
             if [[ "$RET" == "Z" ]]; then
                 if [[ "$VALUE" == "true" ]]; then
                     VALUE="0x1"
@@ -256,7 +323,7 @@ SMALI_PATCH()
                 fi
             fi
 
-            # Convert decimal value to hex
+            # Convert decimal value to hex.
             if [[ "$VALUE" =~ ^-?[0-9]+$ ]]; then
                 VALUE="0x$(printf "%x" "$VALUE")"
             fi
@@ -266,7 +333,7 @@ SMALI_PATCH()
                 return 1
             fi
 
-            # Long type
+            # Long type.
             if [[ "$RET" == "J" ]]; then
                 RET="return-wide $REG"
             else
@@ -287,11 +354,12 @@ SMALI_PATCH()
             RET="return-object $REG"
         fi
 
-        # Decide what to return
+        # Decide what to return.
         local hex
         local num
+
         if [[ "$VALUE" =~ ^-?0x[0-9a-fA-F]+$ ]]; then
-            # Hexadecimal value
+            # Hexadecimal value.
             if [[ "$VALUE" == "-"* ]]; then
                 hex="${VALUE#-0x}"
                 num="$((-16#$hex))"
@@ -299,6 +367,7 @@ SMALI_PATCH()
                 hex="${VALUE#0x}"
                 num="$((16#$hex))"
             fi
+
             if [[ "$RET" == "return-wide"* ]]; then
                 VALUE="const-wide/16 $REG, $VALUE"
             elif [ "$num" -gt "-8" ] && [ "$num" -lt "8" ]; then
@@ -306,9 +375,11 @@ SMALI_PATCH()
             else
                 VALUE="const/16 $REG, $VALUE"
             fi
+
         elif [[ "$VALUE" =~ ^\".*\"$ ]]; then
-            # String value
+            # String value.
             VALUE="const-string $REG, $VALUE"
+
         else
             LOGE "Return value for method \"$METHOD\" in /$PARTITION/$FILE/$SMALI not valid: \"$VALUE\""
             return 1
@@ -343,8 +414,42 @@ SMALI_PATCH()
             LOGE "Failed to replace return value of method \"$METHOD\" in /$PARTITION/$FILE/$SMALI to \"$VALUE\""
             return 1
         fi
-    # Replace a string with another string inside the method
-    # or Replace a line with another line inside the method
+
+    # Replace the entire method body
+    elif [[ "$OPERATION" == "replacebody" ]]; then
+        LOG "- Replacing entire body of method \"$METHOD\" in /$PARTITION/$FILE/$SMALI"
+
+        awk -v FN="$METHOD" -v BODY="$BODY" '
+            BEGIN { inside = 0 }
+
+            /^\.method/ && index($0, FN) {
+                print
+                gsub(/\\n/, "\n", BODY)
+                printf "%s\n", BODY
+                inside = 1
+                next
+            }
+
+            inside && /^\.end method/ {
+                print
+                inside = 0
+                next
+            }
+
+            inside { next }
+
+            { print }
+        ' "$FILE_PATH/$SMALI" > "$FILE_PATH/$SMALI.tmp" && \
+            mv "$FILE_PATH/$SMALI.tmp" "$FILE_PATH/$SMALI"
+
+        AFTER="$(sha1sum "$FILE_PATH/$SMALI")"
+        if [[ "$BEFORE" == "$AFTER" ]]; then
+            LOGE "Failed to replace method body \"$METHOD\" in /$PARTITION/$FILE/$SMALI"
+            return 1
+        fi
+
+    # Replace a string with another string inside the method.
+    # Or replace a line with another line inside the method.
     elif [[ "$OPERATION" == "replace" ]]; then
         LOG "- Replacing value \"$VALUE\" of method \"$METHOD\" in /$PARTITION/$FILE/$SMALI with \"$REPLACEMENT\""
 
@@ -379,10 +484,11 @@ SMALI_PATCH()
         AFTER="$(sha1sum "$FILE_PATH/$SMALI")"
         if [[ "$BEFORE" == "$AFTER" ]]; then
             LOGE "Failed to replace value \"$VALUE\" of method \"$METHOD\" in /$PARTITION/$FILE/$SMALI with \"$REPLACEMENT\""
-            return 1
+            return 0
         fi
-    # Replace all occurrences of value with another
-    #TODO: Improve, add more failchecks, currently it is unsafe
+
+    # Replace all occurrences of value with another.
+    # TODO: Improve, add more failchecks, currently it is unsafe.
     elif [[ "$OPERATION" == "replaceall" ]]; then
         LOG "- Replacing all occurrences of \"$VALUE\" with \"$REPLACEMENT\" in /$PARTITION/$FILE/$SMALI"
 
@@ -391,9 +497,66 @@ SMALI_PATCH()
         AFTER="$(sha1sum "$FILE_PATH/$SMALI")"
         if [[ "$BEFORE" == "$AFTER" ]]; then
             LOGE "Failed to replace all occurrences of \"$VALUE\" with \"$REPLACEMENT\" in /$PARTITION/$FILE/$SMALI"
-            return 1
+            return 0
         fi
     fi
 
     return 0
 }
+
+
+# [
+# Resolve a smali file that is not where the build expected it.
+# - Lets one patch work across firmware builds: R8 renames classes per build, so
+#   a hardcoded "smali/c4/c.smali" only exists on the base it was written for
+# - Only runs when the exact path is missing, so behaviour on a matching base is
+#   byte-identical to before
+# - Refuses to guess: anything other than exactly one candidate resolves to
+#   nothing and the caller falls back to its original error path
+# Usage: _RESOLVE_SMALI_PATH <apktool-path> <smali> [<method>] [<value>] [<operation>]
+_RESOLVE_SMALI_PATH()
+{
+    local FILE_PATH="$1"
+    local SMALI="$2"
+    local METHOD="$3"
+    local VALUE="$4"
+    local OPERATION="$5"
+    local CANDIDATES=""
+    local FILE
+
+    # 1. Unique method declaration.
+    #    <init>/<clinit> exist in almost every class and can never identify one.
+    if [ "$METHOD" ] && [[ "$METHOD" != "<init>"* ]] && [[ "$METHOD" != "<clinit>"* ]]; then
+        while IFS= read -r FILE; do
+            [ "$FILE" ] || continue
+            if awk -v FN="$METHOD" '
+                    /^[[:space:]]*\.method([[:space:]]|$)/ && index($0, FN) { found = 1; exit }
+                    END { exit(found ? 0 : 1) }
+                ' "$FILE" 2> /dev/null; then
+                CANDIDATES+="${FILE#"$FILE_PATH"/}"$'\n'
+            fi
+        done <<< "$(grep -r -l -F -- "$METHOD" "$FILE_PATH" 2> /dev/null || true)"
+    fi
+
+    # 2. Unique string being patched.
+    #    Covers obfuscated classes whose method name is generic, e.g. the dvfs
+    #    policy constants inside SamsungDeviceHealthManagerService.
+    if [ ! "$CANDIDATES" ] && [ "$VALUE" ] && \
+            { [[ "$OPERATION" == "replace" ]] || [[ "$OPERATION" == "replaceall" ]]; }; then
+        CANDIDATES="$(grep -r -l -F -- "$VALUE" "$FILE_PATH" 2> /dev/null | sed "s|^$FILE_PATH/||" || true)"
+    fi
+
+    CANDIDATES="$(sed '/^[[:space:]]*$/d' <<< "$CANDIDATES")"
+
+    if [ ! "$CANDIDATES" ]; then
+        return 0
+    fi
+
+    if [ "$(wc -l <<< "$CANDIDATES")" -ne "1" ]; then
+        LOGW "Cannot resolve \"$SMALI\": $(wc -l <<< "$CANDIDATES") candidate files match"
+        return 0
+    fi
+
+    echo "$CANDIDATES"
+}
+# ]

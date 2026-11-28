@@ -44,7 +44,73 @@ APPLY_PATCH()
     DECODE_APK "$PARTITION" "$FILE" || return 1
 
     LOG "- Applying \"$(grep "^Subject:" "$PATCH" | sed "s/.*PATCH] //")\" to /$PARTITION/$FILE"
-    EVAL "LC_ALL=C git apply --directory=\"$APKTOOL_DIR/$PARTITION/${FILE//system\//}\" --verbose --unsafe-paths \"$PATCH\"" || return 1
+
+    local APKTOOL_PATH="$APKTOOL_DIR/$PARTITION/${FILE//system\//}"
+
+    if EVAL "LC_ALL=C git apply --directory=\"$APKTOOL_PATH\" --verbose --unsafe-paths \"$PATCH\""; then
+        return 0
+    fi
+
+    # Fallback: GNU patch with fuzz.
+    # - git apply requires the surrounding context lines to match exactly, so a
+    #   hunk fails as soon as a neighbouring line differs between two firmware
+    #   builds of the same One UI version
+    # - patch --fuzz=3 drops up to 3 context lines, which lets the same patch
+    #   apply on any firmware build that still contains the patched code
+    # - Set UNICA_NO_FUZZ=1 to disable this and keep stock strict behaviour
+    # - git apply is atomic, patch is not: every file the patch touches is backed
+    #   up first and restored if anything is rejected, so a partial apply can
+    #   never leak into the ROM
+    if [ ! "$UNICA_NO_FUZZ" ] && command -v patch > /dev/null 2>&1; then
+        local BACKUP_DIR="$TMP_DIR/patch_backup"
+        local TARGET_FILE
+        local -a PATCH_FILES=()
+
+        while IFS= read -r TARGET_FILE; do
+            [ "$TARGET_FILE" ] || continue
+            PATCH_FILES+=("$TARGET_FILE")
+        done <<< "$(grep -E "^\+\+\+ b/" "$PATCH" | sed -e "s|^+++ b/||" -e "s|\t.*||")"
+
+        rm -rf "$BACKUP_DIR"
+        for TARGET_FILE in "${PATCH_FILES[@]}"; do
+            if [ -f "$APKTOOL_PATH/$TARGET_FILE" ]; then
+                mkdir -p "$BACKUP_DIR/$(dirname "$TARGET_FILE")"
+                cp -a "$APKTOOL_PATH/$TARGET_FILE" "$BACKUP_DIR/$TARGET_FILE"
+            fi
+        done
+
+        # If literally none of the files the patch touches exist in this build,
+        # there is nothing to retry - log it once and move on
+        local HAVE_TARGET=false
+        for TARGET_FILE in "${PATCH_FILES[@]}"; do
+            if [ -f "$APKTOOL_PATH/$TARGET_FILE" ]; then
+                HAVE_TARGET=true
+                break
+            fi
+        done
+        if ! $HAVE_TARGET; then
+            LOGW "Patch targets are not present in this firmware, skipping"
+            rm -rf "$BACKUP_DIR"
+            LOGE "Patch does not apply to /$PARTITION/$FILE, skipping"
+            return 0
+        fi
+
+        LOGW "Patch did not apply cleanly, retrying with fuzz"
+        # --batch: never prompt. Without it, a hunk whose target file is not
+        # there stops at "File to patch:" and the build hangs on stdin forever
+        if EVAL "LC_ALL=C patch -p1 -d \"$APKTOOL_PATH\" --fuzz=3 --batch --no-backup-if-mismatch --reject-file=- -i \"$PATCH\" < /dev/null"; then
+            LOGW "Patch applied with fuzz"
+            rm -rf "$BACKUP_DIR"
+            return 0
+        fi
+
+        LOGW "Patch rejected, restoring ${#PATCH_FILES[@]} untouched file(s)"
+        [ -d "$BACKUP_DIR" ] && cp -a "$BACKUP_DIR/." "$APKTOOL_PATH/"
+        rm -rf "$BACKUP_DIR"
+    fi
+
+    LOGE "Patch does not apply to /$PARTITION/$FILE, skipping"
+    return 0
 }
 
 # DECODE_APK <partition> <apk/jar>
@@ -73,6 +139,7 @@ GET_GALAXY_STORE_DOWNLOAD_URL()
     local OS
     local ONEUI
     local SYSTEMID
+    local ATTEMPTS
     local PROTOCOL
 
     # Galaxy S25 Ultra EUR_OPENX
@@ -93,39 +160,52 @@ GET_GALAXY_STORE_DOWNLOAD_URL()
         ONEUI="80000"
     fi
 
-    PROTOCOL+="<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
-    PROTOCOL+="<SamsungProtocol networkType=\"0\" openApiVersion=\"$OS\" deviceModel=\"DEVICE\""
-    PROTOCOL+=" mcc=\"262\" mnc=\"01\" csc=\"EUX\" version=\"7.7\" systemId=\"$SYSTEMID\""
-    PROTOCOL+=" deviceFeature=\"locale=en_GB||abi32=armeabi-v7a:armeabi||abi64=arm64-v8a||oneUiVersion=$ONEUI\">"
-    PROTOCOL+="<request id=\"2303\" numParam=\"2\">"
-    PROTOCOL+="<param name=\"stduk\">0</param>"
-    PROTOCOL+="<param name=\"productID\">PRODUCTID</param>"
-    PROTOCOL+="</request>"
-    PROTOCOL+="</SamsungProtocol>"
+    ATTEMPTS=("$OS:$ONEUI")
+    if [ "$OS" -gt "36" ]; then
+        # Fall back to Android 16 / One UI 8.0 if Galaxy Store has no One UI 9 entry yet
+        ATTEMPTS+=("36:80000")
+    fi
 
+    local ATTEMPT_OS
+    local ATTEMPT_ONEUI
     local OUT
     local REQUEST
-    for i in "${DEVICES[@]}"; do
-        if [[ "$PACKAGE" =~ ^[+-]?[0-9]+$ ]]; then
-            OUT="$PACKAGE"
-        else
-            OUT="$(curl -L -s "https://vas.samsungapps.com/stub/stubUpdateCheck.as?appId=$PACKAGE&versionCode=0&deviceId=$i&mcc=262&mnc=01&csc=EUX&sdkVer=$OS&oneUiVersion=$ONEUI&systemId=$SYSTEMID")"
-            OUT="$(grep -o -P "(?<=<productId>)[^<]+" <<< "$OUT")"
-            if [ ! "$OUT" ]; then
-                continue
+    for a in "${ATTEMPTS[@]}"; do
+        ATTEMPT_OS="${a%%:*}"
+        ATTEMPT_ONEUI="${a##*:}"
+
+        PROTOCOL="<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
+        PROTOCOL+="<SamsungProtocol networkType=\"0\" openApiVersion=\"$ATTEMPT_OS\" deviceModel=\"DEVICE\""
+        PROTOCOL+=" mcc=\"262\" mnc=\"01\" csc=\"EUX\" version=\"7.7\" systemId=\"$SYSTEMID\""
+        PROTOCOL+=" deviceFeature=\"locale=en_GB||abi32=armeabi-v7a:armeabi||abi64=arm64-v8a||oneUiVersion=$ATTEMPT_ONEUI\">"
+        PROTOCOL+="<request id=\"2303\" numParam=\"2\">"
+        PROTOCOL+="<param name=\"stduk\">0</param>"
+        PROTOCOL+="<param name=\"productID\">PRODUCTID</param>"
+        PROTOCOL+="</request>"
+        PROTOCOL+="</SamsungProtocol>"
+
+        for i in "${DEVICES[@]}"; do
+            if [[ "$PACKAGE" =~ ^[+-]?[0-9]+$ ]]; then
+                OUT="$PACKAGE"
+            else
+                OUT="$(curl -L -s "https://vas.samsungapps.com/stub/stubUpdateCheck.as?appId=$PACKAGE&versionCode=0&deviceId=$i&mcc=262&mnc=01&csc=EUX&sdkVer=$ATTEMPT_OS&oneUiVersion=$ATTEMPT_ONEUI&systemId=$SYSTEMID")"
+                OUT="$(grep -o -P "(?<=<productId>)[^<]+" <<< "$OUT")"
+                if [ ! "$OUT" ]; then
+                    continue
+                fi
             fi
-        fi
 
-        REQUEST="$PROTOCOL"
-        REQUEST="${REQUEST//DEVICE/$i}"
-        REQUEST="${REQUEST//PRODUCTID/$OUT}"
+            REQUEST="$PROTOCOL"
+            REQUEST="${REQUEST//DEVICE/$i}"
+            REQUEST="${REQUEST//PRODUCTID/$OUT}"
 
-        OUT="$(curl -L -s "https://uk-odc.samsungapps.com/ods.as" -H "Content-Type: text/plain" -d "$REQUEST")"
-        OUT="$(grep -o -P "(?<=<value name=\"downLoadURI\">)[^<]+" <<< "$OUT")"
-        if [ "$OUT" ]; then
-            echo "${OUT//amp;/}"
-            return 0
-        fi
+            OUT="$(curl -L -s "https://uk-odc.samsungapps.com/ods.as" -H "Content-Type: text/plain" -d "$REQUEST")"
+            OUT="$(grep -o -P "(?<=<value name=\"downLoadURI\">)[^<]+" <<< "$OUT")"
+            if [ "$OUT" ]; then
+                echo "${OUT//amp;/}"
+                return 0
+            fi
+        done
     done
 
     LOGE "No download URI found for app \"$PACKAGE\""
@@ -193,6 +273,42 @@ HEX_PATCH()
     xxd -p -c 0 "$FILE" | sed "s/$FROM/$TO/" | xxd -r -p > "$FILE.tmp"
     mv "$FILE.tmp" "$FILE"
 
+    return 0
+}
+
+# HEX_PATCH_ANY <file> <from_1> <to_1> [<from_n> <to_n> ...]
+# Patches the first byte pattern that is present in <file>.
+# - A compiled binary differs between One UI builds, so a single hardcoded
+#   pattern only matches the firmware it was taken from
+# - Never fails the build: an unknown binary is reported and skipped, the
+#   caller keeps its pre-patch behaviour
+HEX_PATCH_ANY()
+{
+    _CHECK_NON_EMPTY_PARAM "FILE" "$1" || return 1
+
+    local FILE="$1"
+    shift
+
+    if [ ! -f "$FILE" ]; then
+        LOGW "File not found: ${FILE//$WORK_DIR/}"
+        return 0
+    fi
+
+    local FROM
+    local TO
+
+    while [[ "$#" -ge 2 ]]; do
+        FROM="${1// /}"
+        TO="$2"
+        shift 2
+
+        if xxd -p -c 0 "$FILE" | grep -q "$(tr "[:upper:]" "[:lower:]" <<< "$FROM")"; then
+            HEX_PATCH "$FILE" "$FROM" "$TO"
+            return 0
+        fi
+    done
+
+    LOGW "No known byte pattern matched in ${FILE//$WORK_DIR/}, skipping"
     return 0
 }
 
