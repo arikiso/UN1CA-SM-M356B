@@ -1,111 +1,169 @@
 <h1 align="center">
-  <img loading="lazy" src="readme-res/banner.png"/>
+<img loading="lazy" src="readme-res/banner.png" alt="AUR1Xf Banner"/>
 </h1>
-<p align="center">
-  <a href="https://github.com/salvogiangri/UN1CA/blob/sixteen/LICENSE"><img loading="lazy" src="https://img.shields.io/github/license/salvogiangri/UN1CA?style=for-the-badge&logo=github"/></a>
-  <a href="https://github.com/salvogiangri/UN1CA/commits/sixteen"><img loading="lazy" src="https://img.shields.io/github/last-commit/salvogiangri/UN1CA/sixteen?style=for-the-badge"/></a>
-  <a href="https://github.com/salvogiangri/UN1CA/stargazers"><img loading="lazy" src="https://img.shields.io/github/stars/salvogiangri/UN1CA?style=for-the-badge"/></a>
-  <a href="https://github.com/salvogiangri/UN1CA/actions/workflows/ci.yml"><img loading="lazy" src="https://img.shields.io/github/actions/workflow/status/salvogiangri/UN1CA/ci.yml?style=for-the-badge"/></a>
-  <a href="https://crowdin.com/project/UN1CA"><img loading="lazy" src="https://img.shields.io/badge/Crowdin-263238?style=for-the-badge&logo=crowdin"/></a>
-</p>
-<p align="center">UN1CA <i>(/ˈu.ni.ka/)</i> is a work-in-progress custom firmware for Samsung Galaxy devices.</p>
 
 <p align="center">
-  <a href="https://github.com/salvogiangri/UN1CA/discussions">🚀 Discussions</a>
-  •
-  <a href="https://t.me/unicarom">💬 Telegram</a>
+<strong>AUR1Xf</strong>
+<br/>
+<em>Beyond the Ordinary.</em>
 </p>
 
-# What is UN1CA?
-UN1CA is a work-in-progress custom firmware for Samsung Galaxy devices, designed to provide a refined, optimized and more rich One UI experience.
-It is based on the latest and greatest iteration of Samsung's UX and it integrates numerous improvements, optimizations and exclusive features.
+<p align="center">
+<a href="https://github.com/salvogiangri/UN1CA/blob/sixteen/LICENSE"><img loading="lazy" src="https://img.shields.io/github/license/salvogiangri/UN1CA?style=for-the-badge&logo=github" alt="License"/></a>
+<a href="https://github.com/salvogiangri/UN1CA/commits/sixteen"><img loading="lazy" src="https://img.shields.io/github/last-commit/salvogiangri/UN1CA/sixteen?style=for-the-badge" alt="Last Commit"/></a>
+<a href="https://github.com/salvogiangri/UN1CA/stargazers"><img loading="lazy" src="https://img.shields.io/github/stars/salvogiangri/UN1CA?style=for-the-badge" alt="Stars"/></a>
+<a href="https://github.com/salvogiangri/UN1CA/actions/workflows/ci.yml"><img loading="lazy" src="https://img.shields.io/github/actions/workflow/status/salvogiangri/UN1CA/ci.yml?style=for-the-badge" alt="Build Status"/></a>
+<a href="https://crowdin.com/project/UN1CA"><img loading="lazy" src="https://img.shields.io/badge/Crowdin-263238?style=for-the-badge&logo=crowdin" alt="Crowdin"/></a>
+</p>
 
-The UN1CA build system automatically builds the required tools, downloads and extracts firmware components, applies the required patches and generates a flashable zip for the target device.
+<p align="center">
+<strong>A premium, performance-focused One UI experience for Samsung Galaxy devices.</strong>
+</p>
 
-The goal is to deliver a fast, smooth and modern UX while offering additional tools, modifications and system‑level enhancements tailored for power users.
+<p align="center">
+<a href="https://github.com/salvogiangri/UN1CA/discussions">Discussions</a>
+•
+<a href="https://t.me/unicarom">Telegram</a>
+</p>
 
-Any form of contribution, suggestions, bug report or feature request for the project will be welcome.
+About AUR1Xf
 
-# What is AUR1Xf
-AUR1Xf is a fork of UN1CA; to make the build system work with One UI 9, we are aiming for an UN1CA-like experience with what we can do. All changes have been made under GPLv3, if you see any problems about credits at repo, please kindly report to me at Telegram, XDA or email.
+AUR1Xf is an independent fork of UN1CA, built with the ambition of bringing an enhanced One UI experience to Samsung Galaxy devices.
 
-# Features
-### Core features:
-- Based on the latest stable Galaxy S23 FE firmware
-- EROFS powered
-- Galaxy S23FE wallpapers/sounds included
-- Galaxy AI support
-  - Audio eraser
-  - Browsing assist
-  - Call assist
-  - Drawing assist
-  - Interpreter
-  - Note assist
-  - Now brief
-  - Photo assist
-  - Semantic search
-  - Transcript assist
-  - Writing assist
-- High end animations
-- Native/live blur support
-- AOD clock transition support
-- Adaptive color tone support
-- Adaptive refresh rate support
-- Extra brightness support
-- Picture remaster support
-- Object, shadow and reflection eraser support
-- Image clipper support
-- Multi user support
-- Samsung DeX support*
-- Camera privacy toggle support
-- Debloated from useless system services/additional apps
-- Dual Messenger available for all apps
-- Custom FlipFont fonts support
-- Outdoor mode support
-- Auto PIN confirm with 4 digits
-- [BluetoothLibraryPatcher](https://github.com/3arthur6/BluetoothLibraryPatcher) integrated
-- [KnoxPatch](https://github.com/salvogiangri/KnoxPatch) integrated
-- Extra CSC features enabled (Call recording, Hiya, Network speed in status bar, AltZLife)
+Designed around the foundations of UN1CA, AUR1Xf aims to extend compatibility with One UI 9, adapting and evolving the original build system wherever possible.
 
-\* DeX via HDMI not available for devices without USB-C DP support
+Our vision is simple: deliver a refined, smooth, and feature-rich experience while maintaining the flexibility and customization that power users expect.
 
-### UN1CA(AUR1Xf)-exclusive features:
-- Integrated OTA updates app
-- Native/live blur toggle
-- One UI Home animations option
-- Vulkan renderer toggle
-- Key attestation spoof ([TrickyStore](https://github.com/5ec1cff/TrickyStore)) options*
-- Play Integrity Fix integrated
-- Ability to hide installed apps ([Hide My Applist](https://github.com/Dr-TSNG/Hide-My-Applist))
-- Ability to hide developer options
-- Allow app downgrade toggle
-- Allow installing apps with old targetSdk toggle
-- Allow secure screenshot toggle
-- Screenshot/screen recording detection toggle
-- Unlimited backup storage on Google Photos
-- Games FPS unlock toggle
+The Vision
+Refinement — A polished and consistent One UI experience.
+Performance — Optimizations focused on smoothness and responsiveness.
+Functionality — Additional features and system-level enhancements.
+Customization — More control over the device and its behavior.
+Evolution — Continuing the foundations of UN1CA with new possibilities.
 
-\* Requires a valid keybox
+AUR1Xf builds upon the original UN1CA build system, which automates tool compilation, firmware acquisition and extraction, patch application, and the generation of flashable firmware packages.
 
-# Licensing
-This project is licensed under the terms of the [GNU General Public License v3.0](LICENSE). External dependencies might be distributed under a different license, such as:
-- [android-tools](https://github.com/nmeum/android-tools), licensed under the [Apache License 2.0](https://github.com/nmeum/android-tools/blob/master/LICENSE)
-- [apktool](https://github.com/iBotPeaches/Apktool), licensed under the [Apache License 2.0](https://github.com/iBotPeaches/Apktool/blob/master/LICENSE.md)
-- [erofs-utils](https://github.com/sekaiacg/erofs-utils/), dual license ([GPL-2.0](https://github.com/sekaiacg/erofs-utils/blob/dev/LICENSES/GPL-2.0), [Apache-2.0](https://github.com/sekaiacg/erofs-utils/blob/dev/LICENSES/Apache-2.0))
-- [img2sdat](https://github.com/xpirt/img2sdat), licensed under the [MIT License](https://github.com/xpirt/img2sdat/blob/master/LICENSE)
-- [platform_build](https://android.googlesource.com/platform/build/) (ext4_utils, f2fs_utils, signapk), licensed under the [Apache License 2.0](https://source.android.com/docs/setup/about/licenses)
+Open Source & Contributions
 
-# Contributors
-<a href="https://github.com/salvogiangri/UN1CA/graphs/contributors"><img loading="lazy" src="https://contrib.rocks/image?repo=salvogiangri/UN1CA"/></a>
+AUR1Xf is developed under the terms of the GNU General Public License v3.0 (GPL-3.0).
 
-# Credits
-A special thanks goes to the following for their invaluable contributions in no particular order:
-- **[ShaDisNX255](https://github.com/ShaDisNX255)** for his help, time and for his [NcX ROM](https://github.com/ShaDisNX255/NcX_Stock) which inspired this project
-- **[DavidArsene](https://github.com/DavidArsene)** for his help and time
-- **[paulowesll](https://github.com/paulowesll)** for his help and support
-- **[Simon1511](https://github.com/Simon1511)** for his support and some of the device-specific patches
-- **[ananjaser1211](https://github.com/ananjaser1211)** for troubleshooting and his time
-- **[Fede2782](https://github.com/Fede2782)** for his contributions and help with Exynos/MTK support
-- **[iDrinkCoffee](https://github.com/iDrinkCoffee-TG)** and **[RisenID](https://github.com/RisenID)** for their support
-- **[LineageOS Team](https://www.lineageos.org/)** for their original [OTA updater implementation](https://github.com/LineageOS/android_packages_apps_Updater)
-- *All the UN1CA project forks, contributors, testers and users ❤️*
+Contributions, suggestions, bug reports, and feature requests are always welcome. If you encounter an issue involving attribution or licensing, please report it through our community channels or project contact.
+
+Features
+Core Features
+Based on the latest stable Galaxy S23 FE firmware
+EROFS-powered filesystem
+Galaxy S23 FE wallpapers and sounds
+Galaxy AI integration:
+Audio Eraser
+Browsing Assist
+Call Assist
+Drawing Assist
+Interpreter
+Note Assist
+Now Brief
+Photo Assist
+Semantic Search
+Transcript Assist
+Writing Assist
+High-end system animations
+Native live blur support
+Always On Display (AOD) clock transitions
+Adaptive Color Tone support
+Adaptive refresh rate support
+Extra Brightness support
+Picture Remaster support
+Object, Shadow, and Reflection Eraser
+Image Clipper support
+Multi-user support
+Samsung DeX support*
+Camera privacy toggle
+Debloated system services and unnecessary applications
+Dual Messenger support for all applications
+Custom FlipFont support
+Outdoor Mode support
+Automatic PIN confirmation (4 digits)
+BluetoothLibraryPatcher integration
+KnoxPatch integration
+Additional CSC features:
+Native call recording
+Hiya integration
+Network speed indicator in the status bar
+AltZLife
+
+* Samsung DeX over HDMI is unavailable on devices without USB-C DisplayPort support.
+
+AUR1Xf Exclusive Features
+Integrated OTA Updates application
+Native live blur toggle
+One UI Home animation options
+Vulkan renderer toggle
+Key attestation spoofing options via TrickyStore*
+Integrated Play Integrity Fix
+Application hiding support via Hide My Applist
+Ability to hide Developer Options
+Application downgrade permission toggle
+Installation support for applications targeting older SDK versions
+Secure screenshot permission toggle
+Screenshot and screen recording detection toggle
+Unlimited Google Photos backup storage
+Game FPS unlock toggle
+
+* Requires a valid keybox. Availability and functionality depend on the device and configuration.
+
+Build System
+
+AUR1Xf inherits the automated build infrastructure from UN1CA.
+
+The build system handles:
+
+Building the required tools and dependencies.
+Downloading and extracting firmware components.
+Applying device-specific patches and modifications.
+Integrating additional features and optimizations.
+Generating a flashable firmware package.
+Licensing
+
+AUR1Xf is licensed under the GNU General Public License v3.0.
+
+Some external dependencies are distributed under their own respective licenses:
+
+Dependency	License
+android-tools	Apache License 2.0
+apktool	Apache License 2.0
+erofs-utils	GPL-2.0 / Apache-2.0
+img2sdat	MIT License
+platform_build	Apache License 2.0
+
+Please refer to the respective upstream repositories for complete licensing information.
+
+Contributors
+
+<p align="center">
+<a href="https://github.com/salvogiangri/UN1CA/graphs/contributors">
+<img loading="lazy" src="https://contrib.rocks/image?repo=salvogiangri/UN1CA" alt="UN1CA Contributors"/>
+</a>
+</p>
+
+Credits & Acknowledgements
+
+AUR1Xf would not be possible without the work, contributions, and support of the developers and communities behind its foundations.
+
+Special thanks to:
+
+ShaDisNX255 — For the help, time, and inspiration from NcX ROM.
+DavidArsene — For the help and continued support.
+paulowesll — For the help and support.
+Simon1511 — For the support and device-specific patches.
+ananjaser1211 — For troubleshooting assistance and time.
+Fede2782 — For contributions and assistance with Exynos/MTK support.
+iDrinkCoffee and RisenID — For their continued support.
+LineageOS Team — For the original OTA updater implementation.
+
+And everyone involved in the UN1CA ecosystem: its forks, developers, contributors, testers, and users.
+
+<p align="center">
+<strong>AUR1Xf</strong>
+<br/>
+<em>Beyond the Ordinary.</em>
+</p>
