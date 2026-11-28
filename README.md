@@ -26,11 +26,14 @@ The goal is to deliver a fast, smooth and modern UX while offering additional to
 
 Any form of contribution, suggestions, bug report or feature request for the project will be welcome.
 
+#What is AUR1Xf
+AUR1Xf is a fork of UN1CA; to make the build system work with One UI 9, we are aiming for an UN1CA-like experience with what we can do. All changes have been made under GPLv3, if you see any problems about credits at repo, please kindly report to me at Telegram, XDA or email.
+
 # Features
 ### Core features:
-- Based on the latest stable Galaxy S22 firmware
+- Based on the latest stable Galaxy S23 FE firmware
 - EROFS powered
-- Galaxy S25 wallpapers/sounds included
+- Galaxy S23FE wallpapers/sounds included
 - Galaxy AI support
   - Audio eraser
   - Browsing assist
@@ -66,7 +69,7 @@ Any form of contribution, suggestions, bug report or feature request for the pro
 
 \* DeX via HDMI not available for devices without USB-C DP support
 
-### UN1CA-exclusive features:
+### UN1CA(AUR1Xf)-exclusive features:
 - Integrated OTA updates app
 - Native/live blur toggle
 - One UI Home animations option
