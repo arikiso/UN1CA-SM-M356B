@@ -91,7 +91,7 @@ Hiya integration
 Network speed indicator in the status bar
 AltZLife
 
-* Samsung DeX over HDMI is unavailable on devices without USB-C DisplayPort support.
+Samsung DeX over HDMI is unavailable on devices without USB-C DisplayPort support.
 
 AUR1Xf Exclusive Features
 Integrated OTA Updates application
@@ -109,7 +109,7 @@ Screenshot and screen recording detection toggle
 Unlimited Google Photos backup storage
 Game FPS unlock toggle
 
-* Requires a valid keybox. Availability and functionality depend on the device and configuration.
+Requires a valid keybox. Availability and functionality depend on the device and configuration.
 
 Build System
 
